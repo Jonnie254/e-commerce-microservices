@@ -11,6 +11,7 @@ import com.jonnie.ecommerce.payment.PaymentRequest;
 import com.jonnie.ecommerce.product.ProductClient;
 import com.jonnie.ecommerce.product.PurchaseRequest;
 import jakarta.persistence.EntityNotFoundException;
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -27,47 +28,56 @@ public class OrderService {
     private final OrderLineService orderLineService;
     private final OrderProducer orderProducer;
     private final PaymentClient paymentClient;
-    public Integer createOrder(OrderRequest orderRequest) {
-        //check the customer (openfeign)
-        var customer = customerClient.findCustomerById(orderRequest.customerId())
-                .orElseThrow(() -> new BusinessException("Cannot create order. Customer not found"));
-        //check the products --> use product microservice
-        var purchaseproducts = this.productClient.purchaseProducts(orderRequest.products());
-        //persist the order
-        var order = this.orderRepository.save(orderMapper.toOrder(orderRequest));
-        //persist the orderLines
-        for(PurchaseRequest purchaseRequest: orderRequest.products()){
-            orderLineService.saveOrderLine(
-                    new OrderLineRequest(
-                            null,
-                            order.getId(),
-                            purchaseRequest.productId(),
-                            purchaseRequest.quantity()
+
+
+        @Transactional
+        public Integer createOrder(OrderRequest orderRequest) {
+            // Check the customer (openfeign)
+            var customer = customerClient.findCustomerById(orderRequest.customerId())
+                    .orElseThrow(() -> new BusinessException("Cannot create order. Customer not found"));
+
+            // Check the products --> use product microservice
+            var purchaseProducts = productClient.purchaseProducts(orderRequest.products());
+
+            // Persist the order first
+            var order = orderRepository.save(orderMapper.toOrder(orderRequest));
+
+            // Now, persist the order lines
+            for (PurchaseRequest purchaseRequest : orderRequest.products()) {
+                // OrderLineRequest must reference the already saved Order (order.getId())
+                orderLineService.saveOrderLine(
+                        new OrderLineRequest(
+                                null,
+                                order.getId(),
+                                purchaseRequest.productId(),
+                                purchaseRequest.quantity()
+                        )
+                );
+            }
+
+            // Start the payment process
+            var paymentRequest = new PaymentRequest(
+                    orderRequest.amount(),
+                    orderRequest.paymentMethod(),
+                    order.getId(),
+                    order.getReference(),
+                    customer
+            );
+            paymentClient.requestOrderPayment(paymentRequest);
+
+            // Send the order confirmation email --> notification microservice (Kafka)
+            orderProducer.SendOrderConfirmation(
+                    new OrderConfirmation(
+                            orderRequest.reference(),
+                            orderRequest.amount(),
+                            orderRequest.paymentMethod(),
+                            customer,
+                            purchaseProducts
                     )
             );
 
+            return order.getId();
         }
-        //start the payment process
-  var paymentRequest = new PaymentRequest(
-          orderRequest.amount(),
-          orderRequest.paymentMethod(),
-          order.getId(),
-          order.getReference(),
-          customer
-  );
-        paymentClient.requestOrderPayment(paymentRequest);
-        //send the order confirmation email --> notification microservice(kafka)
-        orderProducer.SendOrderConfirmation(
-                new OrderConfirmation(
-                        orderRequest.reference(),
-                        orderRequest.amount(),
-                        orderRequest.paymentMethod(),
-                        customer,
-                        purchaseproducts
-                )
-        );
-        return order.getId();
-    }
 
     public List<OrderResponse> findAllOrders() {
         return orderRepository.findAll()

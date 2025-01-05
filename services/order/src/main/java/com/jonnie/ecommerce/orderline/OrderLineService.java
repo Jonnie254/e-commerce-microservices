@@ -1,5 +1,6 @@
 package com.jonnie.ecommerce.orderline;
 
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -10,9 +11,11 @@ import java.util.List;
 public class OrderLineService {
     private final OrderLineRepository orderLineRepository;
     private final OrderLineMapper orderLineMapper;
-    public Integer saveOrderLine(OrderLineRequest orderLineRequest) {
+
+    @Transactional
+    public void saveOrderLine(OrderLineRequest orderLineRequest) {
         var order = orderLineMapper.toOrderlineRequest(orderLineRequest);
-        return orderLineRepository.save(order).getId();
+        orderLineRepository.save(order);
     }
 
     public List<OrderLineResponse> findByOrderId(Integer orderId) {

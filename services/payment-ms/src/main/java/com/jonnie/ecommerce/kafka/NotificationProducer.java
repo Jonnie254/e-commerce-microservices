@@ -15,10 +15,7 @@ public class NotificationProducer {
 
     public void sendNotification(PaymentNotificationRequest paymentNotificationRequest) {
         log.info("Sending notification to kafka topic: <{}>", paymentNotificationRequest);
-        Message<PaymentNotificationRequest> message = MessageBuilder
-                .withPayload(paymentNotificationRequest)
-                .setHeader("type", "payment-topic")
-                .build();
-        kafkaTemplate.send(message);
+        // Directly specifying the topic in the send() method
+        kafkaTemplate.send("payment-topic", paymentNotificationRequest);
     }
 }

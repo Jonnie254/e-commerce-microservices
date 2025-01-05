@@ -72,20 +72,38 @@ services:
   kafka:
     image: confluentinc/cp-kafka:latest
     container_name: ms_kafka
+    ports:
+      - "9092:9092"
+    depends_on:
+      - zookeeper
     environment:
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:9092
-    ports:
-      - "9092:9092"
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
     networks:
       - microservices-net
-    depends_on:
-      - zookeeper
-
+  zipkin:
+    image: openzipkin/zipkin
+    container_name: ms_zipkin
+    ports:
+      - "9411:9411"
+    networks:
+      - microservices-net
+  keycloak:
+    container_name: ms_keycloak
+    image: quay.io/keycloak/keycloak:24.0.2
+    ports:
+      - "9098:8080"
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+    networks:
+      - microservices-net
+    command:
+      - "start-dev"
 
   maildev:
     container_name: ms_maildev
